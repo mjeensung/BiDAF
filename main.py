@@ -33,9 +33,12 @@ reader = READ({"Train_File":"train-v1.1.json",
 
 train_iter = reader.train_iter
 dev_iter = reader.dev_iter
-
 # load model
-model = BIDAF_Model(d=args.word_dim, dropout=args.dropout)
+weight_matrix = reader.WORD.vocab.vectors
+model = BIDAF_Model(vocab_size=weight_matrix.size(0),
+                    d=args.word_dim, 
+                    dropout=args.dropout)
+model.word_embedding.weight.data.copy_(weight_matrix)
 optimizer = torch.optim.Adadelta(model.parameters(), lr=args.learning_rate)
 
 # train

@@ -15,26 +15,13 @@ class CharEmbedding(nn.Module):
         batch_size, length = words.size()
         return torch.randn(batch_size, length, self.d)
 
-
-class WordEmbedding(nn.Module):
-    """
-    Glove.6B.100d
-    """
-    def __init__(self, d):
-        super(WordEmbedding, self).__init__()
-        self.d = d
-
-    def forward(self, words):
-        batch_size, length = words.size()
-        return torch.randn(batch_size, length, self.d)
-
-
 class BIDAF_Model(nn.Module):
-    def __init__(self, d=100, dropout=0.2):
+    def __init__(self, vocab_size, d=100, dropout=0.2):
         super(BIDAF_Model, self).__init__()
         self.d = d
         self.char_embedding = CharEmbedding(d)
-        self.word_embedding = WordEmbedding(d)
+        self.word_embedding = nn.Embedding(num_embeddings=vocab_size,
+                                           embedding_dim=d)
         self.highway_layer =  nn.Linear(2*d,d) # TODO!
         self.lstm_H = nn.LSTM(input_size=d, hidden_size=d, num_layers=1,
                               batch_first=True, bidirectional=True)
