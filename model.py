@@ -150,16 +150,25 @@ class BIDAF_Model(nn.Module):
         # [N,T,2d]
 
         # 6. Output Layer
-        P1 = F.softmax(self.Wp1(torch.cat((G, M), dim=-1)).squeeze() , dim=1)
+        P1 = F.softmax(self.Wp1(torch.cat((G, M), dim=-1)).squeeze(-1) , dim=1)
         print("P1.size()=",P1.size())
         # [N,T,1]
-        P2 = F.softmax(self.Wp2(torch.cat((G, M2), dim=-1)).squeeze() , dim=1)
+        P2 = F.softmax(self.Wp2(torch.cat((G, M2), dim=-1)).squeeze(-1) , dim=1)
         print("P2.size()=",P2.size())
         # [N,T,1]
 
         return P1, P2
         # return 0, 0
 
+    def get_loss(self, start_idx, end_idx, p1, p2):
+        # print("start_idx=",start_idx)
+        # print("p1=",p1)
+        P1 = p1[:,start_idx]
+        P2 = p2[:,end_idx]
+        # print("P1=",P1)
+        N = len(P1)
+        
+        return -(1/N)*torch.sum(torch.log(P1)+torch.log(P2))
 
 def main():
     model = BIDAF_Model()
