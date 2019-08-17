@@ -3,6 +3,7 @@ from prepro import READ
 import torch
 import torch.optim as optim
 import argparse
+from tqdm import tqdm
 
 parser = argparse.ArgumentParser()
 
@@ -32,7 +33,7 @@ reader = READ({"Train_File":"train-v1.1.json",
 })
 
 train_iter = reader.train_iter
-dev_iter = reader.dev_iter
+val_iter = reader.dev_iter
 # load model
 weight_matrix = reader.WORD.vocab.vectors
 model = BIDAF_Model(vocab_size=weight_matrix.size(0),
@@ -48,7 +49,7 @@ for epoch in range(args.epoch):
     train_total = 0
     val_total = 0
     model.train()
-    for i, data in enumerate(train_iter):
+    for i, data in tqdm(enumerate(train_iter),total=len(train_iter)):
         # # pred_start, pred_end = model(context_words=data.c_word,
         # #                              context_chars=data.c_char,
         # #                              query_words=data.q_word,
@@ -64,7 +65,7 @@ for epoch in range(args.epoch):
         optimizer.step()
         train_loss += loss.item()
         train_total += 1
-        print(loss)
+        # print(loss)
         # print(i)
         # print(data.qid)
         # print(data.start_idx)
@@ -76,3 +77,27 @@ for epoch in range(args.epoch):
         # break
     train_loss /= train_total
     print("train_loss=",train_loss)
+
+    model.eval()
+    with torch.no_grad():
+        for i, data in tqdm(enumerate(val_iter),total=len(val_iter)):
+            pred_start, pred_end = model(contexts=data.c_word[0],
+                                        querys=data.q_word[0])
+            loss = model.get_loss(start_idx=data.start_idx,
+                                end_idx=data.end_idx,
+                                p1=pred_start,
+                                p2=pred_end)
+            val_loss += loss.item()
+            val_total += 1
+            # print(loss)
+            # print(i)
+            # print(data.qid)
+            # print(data.start_idx)
+            # print(data.end_idx)
+            # print(data.c_word)
+            # print(data.c_char)
+            # print(data.q_word)
+            # print(data.q_char)
+            # break
+        val_loss /= val_total
+        print("val_loss=",val_loss)
