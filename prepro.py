@@ -108,8 +108,8 @@ class READ():
                                                 ('answer', answer),
                                                 ('start_idx', s_idx),
                                                 ('end_idx', e_idx)]))
-                    break ## FOR TOY
-                break ## FOR TOY
+                #     break ## FOR TOY
+                # break ## FOR TOY
                 
         with open('{}l'.format(path), 'w', encoding='utf-8') as f:
             for line in output:

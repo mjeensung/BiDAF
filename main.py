@@ -12,12 +12,14 @@ parser.add_argument('--max_token_len',
                     default=200, type=int)
 parser.add_argument('--word_dim', 
                     default=100, type=int)
+parser.add_argument('--char_dim', 
+                    default=100, type=int)
 parser.add_argument('--learning_rate', 
                     default=0.5, type=float)
 parser.add_argument('--epoch', 
                     default=10, type=int)
 parser.add_argument('--batch', 
-                    default=1, type=int)
+                    default=10, type=int)
 parser.add_argument('--dropout', 
                     default=0.2, type=float)
 
@@ -35,9 +37,13 @@ reader = READ({"Train_File":"train-v1.1.json",
 train_iter = reader.train_iter
 val_iter = reader.dev_iter
 # load model
+print("len(reader.WORD.vocab)=",len(reader.WORD.vocab))
+print("len(reader.CHAR.vocab)=",len(reader.CHAR.vocab))
 weight_matrix = reader.WORD.vocab.vectors
-model = BIDAF_Model(vocab_size=weight_matrix.size(0),
-                    d=args.word_dim, 
+model = BIDAF_Model(char_size=len(reader.CHAR.vocab),
+                    vocab_size=len(reader.WORD.vocab),
+                    char_dim = args.char_dim,
+                    word_dim = args.word_dim, 
                     dropout=args.dropout)
 model.word_embedding.weight.data.copy_(weight_matrix)
 optimizer = torch.optim.Adadelta(model.parameters(), lr=args.learning_rate)
@@ -50,12 +56,10 @@ for epoch in range(args.epoch):
     val_total = 0
     model.train()
     for i, data in tqdm(enumerate(train_iter),total=len(train_iter)):
-        # # pred_start, pred_end = model(context_words=data.c_word,
-        # #                              context_chars=data.c_char,
-        # #                              query_words=data.q_word,
-        # #                              query_chars=data.q_char)
-        pred_start, pred_end = model(contexts=data.c_word[0],
-                                     querys=data.q_word[0])
+        pred_start, pred_end = model(context_words=data.c_word[0],
+                                     context_chars=data.c_char,
+                                     query_words=data.q_word[0],
+                                     query_chars=data.q_char)
         loss = model.get_loss(start_idx=data.start_idx,
                               end_idx=data.end_idx,
                               p1=pred_start,
@@ -74,15 +78,18 @@ for epoch in range(args.epoch):
         # print(data.c_char)
         # print(data.q_word)
         # print(data.q_char)
-        # break
+    #     break
+    # break
     train_loss /= train_total
     print("train_loss=",train_loss)
 
     model.eval()
     with torch.no_grad():
         for i, data in tqdm(enumerate(val_iter),total=len(val_iter)):
-            pred_start, pred_end = model(contexts=data.c_word[0],
-                                        querys=data.q_word[0])
+            pred_start, pred_end = model(context_words=data.c_word[0],
+                                     context_chars=data.c_char,
+                                     query_words=data.q_word[0],
+                                     query_chars=data.q_char)
             loss = model.get_loss(start_idx=data.start_idx,
                                 end_idx=data.end_idx,
                                 p1=pred_start,
