@@ -11,7 +11,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--max_token_len', 
                     default=200, type=int)
 parser.add_argument('--word_dim', 
-                    default=100, type=int)
+                    default=300, type=int)
 parser.add_argument('--char_dim', 
                     default=100, type=int)
 parser.add_argument('--learning_rate', 
@@ -19,7 +19,7 @@ parser.add_argument('--learning_rate',
 parser.add_argument('--epoch', 
                     default=10, type=int)
 parser.add_argument('--batch', 
-                    default=10, type=int)
+                    default=32, type=int)
 parser.add_argument('--dropout', 
                     default=0.2, type=float)
 
@@ -48,6 +48,7 @@ model = BIDAF_Model(char_size=len(reader.CHAR.vocab),
 model.word_embedding.weight.data.copy_(weight_matrix)
 optimizer = torch.optim.Adadelta(model.parameters(), lr=args.learning_rate)
 
+best_loss = float("inf")
 # train
 for epoch in range(args.epoch):
     train_loss = 0
@@ -108,3 +109,10 @@ for epoch in range(args.epoch):
             # break
         val_loss /= val_total
         print("val_loss=",val_loss)
+
+        if val_loss < best_loss:
+            best_loss = val_loss
+            model.save_checkpoint({
+                'state_dict':model.state_dict(),
+                'optimizer':optimizer.state_dict()
+            },"./","model.ckpt")

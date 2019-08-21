@@ -45,7 +45,7 @@ class READ():
         logging.info("Preprocessing Data - Third Phase  :: Building Vocabulary")
         
         self.CHAR.build_vocab(self.train, self.dev)
-        self.WORD.build_vocab(self.train, self.dev, vectors=GloVe(name='6B', dim=args["Word_Dim"]))
+        self.WORD.build_vocab(self.train, self.dev, vectors=GloVe(name='840B', dim=args["Word_Dim"]))
 
         logging.info("Preprocessing Data - Fourth Phase :: Building Itertors")
 
