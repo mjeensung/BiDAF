@@ -71,7 +71,7 @@ class CharEmbedding(nn.Module):
         # print("x4.size()=",x.size())
         # [N* sentence_len, outchannel, featuremap_size, 1]
 
-        x = x.squeeze().permute(0,2,1)
+        x = x.squeeze(-1).permute(0,2,1)
         # print("x5.size()=",x.size())
         # [N* sentence_len, featuremap_size, outchannel]
 
@@ -290,6 +290,9 @@ class BIDAF_Model(nn.Module):
         self.load_state_dict(checkpoint['state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer'])
         return self
+
+    # def get_answer(self, contexts, pred_start, pred_end):
+
 
 def main():
     model = BIDAF_Model(char_size=20, vocab_size=100)

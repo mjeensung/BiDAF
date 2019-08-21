@@ -80,3 +80,20 @@ def evaluate(args, predictions):
     f1 = 100.0 * f1 / total
 
     return {'exact_match': exact_match, 'f1': f1}
+
+import csv
+
+def write_tsv(filename, rows, append=False):
+    # print("write_tsv({},{},{})".format(filename,len(rows),append))
+    if append == True:
+        mode = 'a'
+    else:
+        mode = 'w'
+    if '.tsv' not in filename:
+        filename = filename + '.tsv'
+        
+    f = open(filename,mode,encoding='utf-8',newline='')
+    wr = csv.writer(f,delimiter='\t')
+    for row in rows:
+        wr.writerow(row)
+    f.close()

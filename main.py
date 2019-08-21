@@ -4,7 +4,7 @@ import torch
 import torch.optim as optim
 import argparse
 from tqdm import tqdm
-
+from util import *
 parser = argparse.ArgumentParser()
 
 # Run settings
@@ -49,6 +49,7 @@ model.word_embedding.weight.data.copy_(weight_matrix)
 optimizer = torch.optim.Adadelta(model.parameters(), lr=args.learning_rate)
 
 best_loss = float("inf")
+write_tsv("result",[["train_loss","val_loss"]],append=False)
 # train
 for epoch in range(args.epoch):
     train_loss = 0
@@ -116,3 +117,6 @@ for epoch in range(args.epoch):
                 'state_dict':model.state_dict(),
                 'optimizer':optimizer.state_dict()
             },"./","model.ckpt")
+    
+    write_tsv("result",[[train_loss,val_loss]],append=True)
+    
