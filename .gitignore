@@ -3,3 +3,7 @@ __pycache__
 .vscode
 
 *checkpoint.ipynb
+
+*.jsonl
+*.ckpt
+*.tsv
