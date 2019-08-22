@@ -267,12 +267,12 @@ class BIDAF_Model(nn.Module):
         # 6. Output Layer
         P1 = self.Wp1(torch.cat((G, M), dim=-1)).squeeze(-1)
         P1 = self.dropout(P1)
-        P1 = F.softmax(P1 , dim=1)
+        P1 = F.log_softmax(P1 , dim=1)
         # print("P1.size()=",P1.size())
         # [N,T]
         P2 = self.Wp2(torch.cat((G, M2), dim=-1)).squeeze(-1)
         P2 = self.dropout(P2)
-        P2 = F.softmax(P2, dim=1)
+        P2 = F.log_softmax(P2, dim=1)
         # print("P2.size()=",P2.size())
         # [N,T]
 

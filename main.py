@@ -11,7 +11,7 @@ import os
 def train(model, args, data):
     parameters = filter(lambda p: p.requires_grad, model.parameters())
     optimizer = optim.Adadelta(parameters, lr=args.learning_rate)
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.NLLLoss()
 
     model.train()
     loss, total = 0, 0
@@ -35,7 +35,7 @@ def train(model, args, data):
     return loss, model
 
 def test(model, args, data):
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.NLLLoss()
     loss, total = 0,0
     answers = dict()
     model.eval()
