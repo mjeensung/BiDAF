@@ -1,122 +1,135 @@
-from model import BIDAF_Model
-from prepro import READ
+from model.model import BIDAF_Model
+from model.data import SQuAD
 import torch
+import torch.nn as nn
 import torch.optim as optim
 import argparse
 from tqdm import tqdm
 from util import *
-parser = argparse.ArgumentParser()
+import os
 
-# Run settings
-parser.add_argument('--max_token_len', 
-                    default=200, type=int)
-parser.add_argument('--word_dim', 
-                    default=300, type=int)
-parser.add_argument('--char_dim', 
-                    default=100, type=int)
-parser.add_argument('--learning_rate', 
-                    default=0.5, type=float)
-parser.add_argument('--epoch', 
-                    default=10, type=int)
-parser.add_argument('--batch', 
-                    default=32, type=int)
-parser.add_argument('--dropout', 
-                    default=0.2, type=float)
+def train(model, args, data):
+    parameters = filter(lambda p: p.requires_grad, model.parameters())
+    optimizer = optim.Adadelta(parameters, lr=args.learning_rate)
+    criterion = nn.CrossEntropyLoss()
 
-args = parser.parse_args()
-
-# load data
-reader = READ({"Train_File":"train-v1.1.json",
-        "Dev_File":"dev-v1.1.json",
-        "Max_Token_Length":args.max_token_len,
-        "Word_Dim":args.word_dim,
-        "GPU":0,
-        "Batch_Size":args.batch
-})
-
-train_iter = reader.train_iter
-val_iter = reader.dev_iter
-# load model
-print("len(reader.WORD.vocab)=",len(reader.WORD.vocab))
-print("len(reader.CHAR.vocab)=",len(reader.CHAR.vocab))
-weight_matrix = reader.WORD.vocab.vectors
-model = BIDAF_Model(char_size=len(reader.CHAR.vocab),
-                    vocab_size=len(reader.WORD.vocab),
-                    char_dim = args.char_dim,
-                    word_dim = args.word_dim, 
-                    dropout=args.dropout)
-model.word_embedding.weight.data.copy_(weight_matrix)
-optimizer = torch.optim.Adadelta(model.parameters(), lr=args.learning_rate)
-
-best_loss = float("inf")
-write_tsv("result",[["train_loss","val_loss"]],append=False)
-# train
-for epoch in range(args.epoch):
-    train_loss = 0
-    val_loss = 0
-    train_total = 0
-    val_total = 0
     model.train()
-    for i, data in tqdm(enumerate(train_iter),total=len(train_iter)):
-        pred_start, pred_end = model(context_words=data.c_word[0],
-                                     context_chars=data.c_char,
-                                     query_words=data.q_word[0],
-                                     query_chars=data.q_char)
-        loss = model.get_loss(start_idx=data.start_idx,
-                              end_idx=data.end_idx,
-                              p1=pred_start,
-                              p2=pred_end)
+    loss, total = 0, 0
+
+    iterator = data.train_iter
+    for i, batch in enumerate(iterator):
+        p1, p2 = model(context_words=batch.c_word[0],
+                    context_chars=batch.c_char,
+                    query_words=batch.q_word[0],
+                    query_chars=batch.q_char)
         optimizer.zero_grad()
-        loss.backward()
+        batch_loss = criterion(p1,batch.start_idx) + criterion(p2,batch.end_idx)
+        if i%25 == 0 :
+            print("step={}/{}, batch_loss={}".format(i+1, len(iterator), batch_loss))
+        loss += batch_loss.item()
+        total += 1
+        batch_loss.backward()
         optimizer.step()
-        train_loss += loss.item()
-        train_total += 1
-        # print(loss)
-        # print(i)
-        # print(data.qid)
-        # print(data.start_idx)
-        # print(data.end_idx)
-        # print(data.c_word)
-        # print(data.c_char)
-        # print(data.q_word)
-        # print(data.q_char)
-    #     break
-    # break
-    train_loss /= train_total
-    print("train_loss=",train_loss)
 
+    loss /= total
+    return loss, model
+
+def test(model, args, data):
+    criterion = nn.CrossEntropyLoss()
+    loss, total = 0,0
+    answers = dict()
     model.eval()
-    with torch.no_grad():
-        for i, data in tqdm(enumerate(val_iter),total=len(val_iter)):
-            pred_start, pred_end = model(context_words=data.c_word[0],
-                                     context_chars=data.c_char,
-                                     query_words=data.q_word[0],
-                                     query_chars=data.q_char)
-            loss = model.get_loss(start_idx=data.start_idx,
-                                end_idx=data.end_idx,
-                                p1=pred_start,
-                                p2=pred_end)
-            val_loss += loss.item()
-            val_total += 1
-            # print(loss)
-            # print(i)
-            # print(data.qid)
-            # print(data.start_idx)
-            # print(data.end_idx)
-            # print(data.c_word)
-            # print(data.c_char)
-            # print(data.q_word)
-            # print(data.q_char)
-            # break
-        val_loss /= val_total
-        print("val_loss=",val_loss)
 
-        if val_loss < best_loss:
-            best_loss = val_loss
-            model.save_checkpoint({
-                'state_dict':model.state_dict(),
-                'optimizer':optimizer.state_dict()
-            },"./","model.ckpt")
+    iterator = data.dev_iter
+    with torch.no_grad():
+        for i, batch in enumerate(iterator):
+            p1, p2 = model(context_words=batch.c_word[0],
+                    context_chars=batch.c_char,
+                    query_words=batch.q_word[0],
+                    query_chars=batch.q_char)
+            batch_loss = criterion(p1,batch.start_idx) + criterion(p2,batch.end_idx)
+            loss += batch_loss.item()
+            total += 1
+
+            # (batch, c_len, c_len)
+            batch_size, c_len = p1.size()
+            ls = nn.LogSoftmax(dim=1)
+            mask = (torch.ones(c_len, c_len) * float('-inf')).cuda().tril(-1).unsqueeze(0).expand(batch_size, -1, -1)
+            score = (ls(p1).unsqueeze(2) + ls(p2).unsqueeze(1)) + mask
+            score, s_idx = score.max(dim=1)
+            score, e_idx = score.max(dim=1)
+            s_idx = torch.gather(s_idx, 1, e_idx.view(-1, 1)).squeeze()
+
+            for i in range(batch_size):
+                id = batch.qid[i]
+                answer = batch.c_word[0][i][s_idx[i]:e_idx[i]+1]
+                answer = ' '.join([data.WORD.vocab.itos[idx] for idx in answer])
+                answers[id] = answer
+
+    loss /= total
+    results = evaluate(answers)
+    return loss, results['exact_match'], results['f1']
+
+def main():
+    parser = argparse.ArgumentParser()
+    # model
+    parser.add_argument('--char_dim', default=100, type=int)
+    parser.add_argument('--char_channel_width', default=5, type=int)
+    parser.add_argument('--char_channel_size', default=100, type=int)
+    parser.add_argument('--word_dim', default=100, type=int)
+    parser.add_argument('--dropout', default=0.2, type=float)
     
-    write_tsv("result",[[train_loss,val_loss]],append=True)
+    # data
+    parser.add_argument('--max_token_len', default=400, type=int)
+
+    # train
+    parser.add_argument('--epoch', default=12, type=int)
+    parser.add_argument('--exp-decay-rate', default=0.999, type=float)
+    parser.add_argument('--learning_rate', default=0.5, type=float)
+    parser.add_argument('--train_batch_size', default=60, type=int)
+    parser.add_argument('--train_file', default='train-v1.1.json')
+    parser.add_argument('--GPU', default=0, type=int)
+
+    # dev
+    parser.add_argument('--dev_batch_size', default=100, type=int)
+    parser.add_argument('--dev_file', default='dev-v1.1.json')
+
     
+    # parser.add_argument('--hidden-size', default=100, type=int)
+    # parser.add_argument('--print-freq', default=250, type=int)
+        
+    args = parser.parse_args()
+
+    print('loading SQuAD data...')
+    data = SQuAD(args)
+    setattr(args, 'char_vocab_size', len(data.CHAR.vocab))
+    setattr(args, 'word_vocab_size', len(data.WORD.vocab))
+    print('data loading complete!')
+
+    print('loading model')
+    model = BIDAF_Model(
+                args,
+                char_size=len(data.CHAR.vocab),
+                vocab_size=len(data.WORD.vocab))
+    weight_matrix = data.WORD.vocab.vectors
+    model.word_embedding.weight.data.copy_(weight_matrix)
+    print('loading model complete!')
+
+    print('training start!')
+    best_f1 = 0
+    if not os.path.exists('saved_models'):
+        os.makedirs('saved_models')
+
+    for epoch in range(args.epoch):
+        train_loss, model = train(model, args, data)
+        val_loss, exact_match, f1 = test(model, args, data)
+
+        print("epoch={}/{} train_loss={}, val_loss={}, exact_match={}, f1={}".format(epoch+1,args.epoch,train_loss, val_loss, exact_match, f1))
+        if best_f1 < f1:
+            best_f1 = f1
+            model.save_checkpoint({'state_dict':model.state_dict()},"./","model.ckpt")
+    print('training finished!')
+
+
+if __name__ == '__main__':
+    main()

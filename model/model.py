@@ -104,12 +104,12 @@ class CharEmbedding(nn.Module):
         return self
 
 class BIDAF_Model(nn.Module):
-    def __init__(self, char_size, vocab_size, char_dim, word_dim, dropout=0.2, use_cuda=True):
+    def __init__(self, args, char_size, vocab_size, use_cuda=True):
         super(BIDAF_Model, self).__init__()
-        self.d = char_dim + word_dim
-        self.char_embedding = CharEmbedding(char_size= char_size, char_dim=char_dim, dropout=dropout)
+        self.d = args.char_dim + args.word_dim
+        self.char_embedding = CharEmbedding(char_size= char_size, char_dim=args.char_dim, dropout=args.dropout)
         self.word_embedding = nn.Embedding(num_embeddings=vocab_size,
-                                           embedding_dim=word_dim, padding_idx=0)
+                                           embedding_dim=args.word_dim, padding_idx=0)
         self.highway_layer =  nn.Sequential(
             Highway_Network(self.d,self.d),
             Highway_Network(self.d,self.d))
@@ -118,13 +118,13 @@ class BIDAF_Model(nn.Module):
         self.lstm_U = nn.LSTM(input_size=self.d, hidden_size=self.d, num_layers=1,
                               batch_first=True, bidirectional=True)
         self.lstm_M = nn.LSTM(input_size=8*self.d, hidden_size=self.d, num_layers=2,
-                              batch_first=True, bidirectional=True, dropout=dropout)
+                              batch_first=True, bidirectional=True, dropout=args.dropout)
         self.lstm_M2 = nn.LSTM(input_size=2*self.d, hidden_size=self.d, num_layers=1,
                                batch_first=True, bidirectional=True)
         self.Ws = nn.Linear(6*self.d, 1, bias=False)
         self.Wp1 = nn.Linear(10*self.d, 1 , bias=False)
         self.Wp2 = nn.Linear(10*self.d, 1 , bias=False)
-        self.dropout = nn.Dropout(dropout)
+        self.dropout = nn.Dropout(args.dropout)
 
         self.use_cuda = use_cuda
 
@@ -142,11 +142,6 @@ class BIDAF_Model(nn.Module):
             
 
     def forward(self, context_words, context_chars, query_words, query_chars):
-        if self.use_cuda:
-            context_words = context_words.cuda()
-            context_chars = context_chars.cuda()
-            query_words = query_words.cuda()
-            query_chars = query_chars.cuda()
         batch_size, T = context_words.size()
         _, J = query_words.size()
 

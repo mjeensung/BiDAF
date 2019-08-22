@@ -53,10 +53,10 @@ def metric_max_over_ground_truths(metric_fn, prediction, ground_truths):
     return max(scores_for_ground_truths)
 
 
-def evaluate(args, predictions):
-    path = './data/squad/'
+def evaluate(predictions):
+    path = './data/squad/dev-v1.1.json'
     f1 = exact_match = total = 0
-    with open(path + args.Dev_File) as d:
+    with open(path) as d:
         dev_json = json.load(d)
     dev_dataset = dev_json['data']
     

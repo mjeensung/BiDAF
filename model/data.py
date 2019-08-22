@@ -12,15 +12,15 @@ import pdb
 
 logging.getLogger().setLevel(logging.INFO)
 
-class READ():
+class SQuAD():
     def __init__(self, args):
-
+        print("args=",args)
         path = './data/squad'
 
         logging.info("Preprocessing Data - First Phase  :: Reading And Transforming")
 
-        self.preprocess('{}/{}'.format(path, args["Train_File"]))
-        self.preprocess('{}/{}'.format(path, args["Dev_File"]))
+        self.preprocess('{}/{}'.format(path, args.train_file))
+        self.preprocess('{}/{}'.format(path, args.dev_file))
 
         self.RAW = data.RawField(); self.RAW.is_target = False
 
@@ -37,24 +37,24 @@ class READ():
         
         logging.info("Preprocessing Data - Second Phase :: To Torchtext")
         
-        self.train, self.dev = data.TabularDataset.splits(path=path, train=args["Train_File"] + 'l',  \
-                                                          validation=args["Dev_File"] + 'l', format='json', fields=dict_fields)
-        if args["Max_Token_Length"] > 0:
-            self.train.examples = [e for e in self.train.examples if len(e.c_word) <= args["Max_Token_Length"]]
+        self.train, self.dev = data.TabularDataset.splits(path=path, train=args.train_file + 'l',  \
+                                                          validation=args.dev_file + 'l', format='json', fields=dict_fields)
+        if args.max_token_len > 0:
+            self.train.examples = [e for e in self.train.examples if len(e.c_word) <= args.max_token_len]
 
         logging.info("Preprocessing Data - Third Phase  :: Building Vocabulary")
         
         self.CHAR.build_vocab(self.train, self.dev)
-        self.WORD.build_vocab(self.train, self.dev, vectors=GloVe(name='840B', dim=args["Word_Dim"]))
+        self.WORD.build_vocab(self.train, self.dev, vectors=GloVe(name='6B', dim=args.word_dim))
 
         logging.info("Preprocessing Data - Fourth Phase :: Building Itertors")
 
-        device = torch.device("cuda:{}".format(args["GPU"]) if torch.cuda.is_available() else "cpu")
+        device = torch.device("cuda:{}".format(args.GPU) if torch.cuda.is_available() else "cpu")
         
-        self.train_iter = data.BucketIterator(dataset = self.train, batch_size = args["Batch_Size"], \
-                                              sort_key = lambda x : len(x.c_word))
+        self.train_iter = data.BucketIterator(dataset = self.train, batch_size = args.train_batch_size, \
+                                              sort_key = lambda x : len(x.c_word), device=device)
         
-        self.dev_iter   = data.BucketIterator(dataset = self.dev, batch_size = 10, sort_key = lambda x : len(x.c_word))
+        self.dev_iter   = data.BucketIterator(dataset = self.dev, batch_size = args.dev_batch_size, sort_key = lambda x : len(x.c_word), device=device)
 
 
     def preprocess(self, path):
@@ -117,8 +117,8 @@ class READ():
                 print('', file=f)
 
 if __name__ == "__main__":
-    args = {"Train_File":"train-v1.1.json",
-        "Dev_File":"dev-v1.1.json",
+    args = {"train_file":"train-v1.1.json",
+        "dev_file":"dev-v1.1.json",
         "Max_Token_Length":50,
         "Word_Dim":100,
         "GPU":0,
