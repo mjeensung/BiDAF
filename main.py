@@ -17,14 +17,14 @@ def train(model, args, data):
     loss, total = 0, 0
 
     iterator = data.train_iter
-    for i, batch in enumerate(iterator):
+    for i, batch in tqdm(enumerate(iterator), total=len(iterator)):
         p1, p2 = model(context_words=batch.c_word[0],
                     context_chars=batch.c_char,
                     query_words=batch.q_word[0],
                     query_chars=batch.q_char)
         optimizer.zero_grad()
         batch_loss = criterion(p1,batch.start_idx) + criterion(p2,batch.end_idx)
-        if i%25 == 0 :
+        if i%args.print_freq == 0 :
             print("step={}/{}, batch_loss={}".format(i+1, len(iterator), batch_loss))
         loss += batch_loss.item()
         total += 1
@@ -42,7 +42,7 @@ def test(model, args, data):
 
     iterator = data.dev_iter
     with torch.no_grad():
-        for i, batch in enumerate(iterator):
+        for i, batch in tqdm(enumerate(iterator), total=len(iterator)):
             p1, p2 = model(context_words=batch.c_word[0],
                     context_chars=batch.c_char,
                     query_words=batch.q_word[0],
@@ -79,6 +79,7 @@ def main():
     parser.add_argument('--word_dim', default=100, type=int)
     parser.add_argument('--hidden_size', default=100, type=int)
     parser.add_argument('--dropout', default=0.2, type=float)
+    parser.add_argument('--print_freq', default=250, type=int)
     
     # data
     parser.add_argument('--max_token_len', default=400, type=int)
@@ -95,10 +96,6 @@ def main():
     parser.add_argument('--dev_batch_size', default=100, type=int)
     parser.add_argument('--dev_file', default='dev-v1.1.json')
 
-    
-    # parser.add_argument('--hidden-size', default=100, type=int)
-    # parser.add_argument('--print-freq', default=250, type=int)
-        
     args = parser.parse_args()
 
     print('loading SQuAD data...')
@@ -118,11 +115,13 @@ def main():
     if not os.path.exists('saved_models'):
         os.makedirs('saved_models')
 
+    write_tsv("result",[['train_loss','val_loss', 'exact_match', 'f1']],append=False)
     for epoch in range(args.epoch):
         train_loss, model = train(model, args, data)
         val_loss, exact_match, f1 = test(model, args, data)
 
         print("epoch={}/{} train_loss={}, val_loss={}, exact_match={}, f1={}".format(epoch+1,args.epoch,train_loss, val_loss, exact_match, f1))
+        write_tsv("result",[[train_loss,val_loss, exact_match, f1]],append=True)
         if best_f1 < f1:
             best_f1 = f1
             model.save_checkpoint({'state_dict':model.state_dict()},"./","model.ckpt")
