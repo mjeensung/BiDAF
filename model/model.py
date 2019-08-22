@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import logging
+import pdb
 LOGGER = logging.getLogger()
 
 class Highway_Network(nn.Module):
@@ -38,7 +39,7 @@ class CharEmbedding(nn.Module):
     """
     def __init__(self, char_size, char_dim, dropout):
         super(CharEmbedding, self).__init__()
-        self.charembed = nn.Embedding(char_size, char_dim, padding_idx=0)
+        self.charembed = nn.Embedding(char_size, char_dim, padding_idx=1)
         nn.init.uniform_(self.charembed.weight, -0.001, 0.001)
 
         self.width = 5
@@ -157,6 +158,7 @@ class BIDAF_Model(nn.Module):
             
 
     def forward(self, context_words, context_chars, query_words, query_chars):
+        # pdb.set_trace()
         batch_size, T = context_words.size()
         _, J = query_words.size()
 

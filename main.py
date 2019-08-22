@@ -67,7 +67,7 @@ def test(model, args, data):
                 answers[id] = answer
 
     loss /= total
-    results = evaluate(answers)
+    results = evaluate(args, answers)
     return loss, results['exact_match'], results['f1']
 
 def main():
