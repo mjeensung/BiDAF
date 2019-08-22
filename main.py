@@ -77,6 +77,7 @@ def main():
     parser.add_argument('--char_channel_width', default=5, type=int)
     parser.add_argument('--char_channel_size', default=100, type=int)
     parser.add_argument('--word_dim', default=100, type=int)
+    parser.add_argument('--hidden_size', default=100, type=int)
     parser.add_argument('--dropout', default=0.2, type=float)
     
     # data
@@ -109,10 +110,7 @@ def main():
     print('loading model')
     model = BIDAF_Model(
                 args,
-                char_size=len(data.CHAR.vocab),
-                vocab_size=len(data.WORD.vocab))
-    weight_matrix = data.WORD.vocab.vectors
-    model.word_embedding.weight.data.copy_(weight_matrix)
+                pretrained = data.WORD.vocab.vectors)
     print('loading model complete!')
 
     print('training start!')

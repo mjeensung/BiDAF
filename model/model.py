@@ -39,6 +39,7 @@ class CharEmbedding(nn.Module):
     def __init__(self, char_size, char_dim, dropout):
         super(CharEmbedding, self).__init__()
         self.charembed = nn.Embedding(char_size, char_dim, padding_idx=0)
+        nn.init.uniform_(self.charembed.weight, -0.001, 0.001)
 
         self.width = 5
         self.outchannel = char_dim
@@ -104,30 +105,44 @@ class CharEmbedding(nn.Module):
         return self
 
 class BIDAF_Model(nn.Module):
-    def __init__(self, args, char_size, vocab_size, use_cuda=True):
+    def __init__(self, args, pretrained, use_cuda=True):
         super(BIDAF_Model, self).__init__()
-        self.d = args.char_dim + args.word_dim
-        self.char_embedding = CharEmbedding(char_size= char_size, char_dim=args.char_dim, dropout=args.dropout)
-        self.word_embedding = nn.Embedding(num_embeddings=vocab_size,
-                                           embedding_dim=args.word_dim, padding_idx=0)
-        self.highway_layer =  nn.Sequential(
-            Highway_Network(self.d,self.d),
-            Highway_Network(self.d,self.d))
-        self.lstm_H = nn.LSTM(input_size=self.d, hidden_size=self.d, num_layers=1,
-                              batch_first=True, bidirectional=True)
-        self.lstm_U = nn.LSTM(input_size=self.d, hidden_size=self.d, num_layers=1,
-                              batch_first=True, bidirectional=True)
-        self.lstm_M = nn.LSTM(input_size=8*self.d, hidden_size=self.d, num_layers=2,
-                              batch_first=True, bidirectional=True, dropout=args.dropout)
-        self.lstm_M2 = nn.LSTM(input_size=2*self.d, hidden_size=self.d, num_layers=1,
-                               batch_first=True, bidirectional=True)
-        self.Ws = nn.Linear(6*self.d, 1, bias=False)
-        self.Wp1 = nn.Linear(10*self.d, 1 , bias=False)
-        self.Wp2 = nn.Linear(10*self.d, 1 , bias=False)
+        self.d = args.hidden_size
         self.dropout = nn.Dropout(args.dropout)
 
-        self.use_cuda = use_cuda
+        # 1. Character Embedding Layer
+        self.char_embedding = CharEmbedding(char_size= args.char_vocab_size, char_dim=args.char_dim, dropout=args.dropout)
+ 
+        # 2. Word Embedding Layer
+        # initialize word embedding with GloVe
+        self.word_embedding = nn.Embedding.from_pretrained(pretrained, freeze=True)
 
+        # highway network
+        concat_dim = args.char_dim+args.word_dim
+        self.highway_layer =  nn.Sequential(
+            Highway_Network(concat_dim,concat_dim),
+            Highway_Network(concat_dim,concat_dim))
+
+        # 3. Contextual Embedding Layer    
+        self.lstm_H = nn.LSTM(input_size=concat_dim, hidden_size=self.d, num_layers=1,
+                              batch_first=True, bidirectional=True)
+        self.lstm_U = nn.LSTM(input_size=concat_dim, hidden_size=self.d, num_layers=1,
+                              batch_first=True, bidirectional=True)
+
+        # 4. Attention Flow Layer
+        self.Ws = nn.Linear(6*self.d, 1, bias=False)
+
+        # 5. Modeling Layer
+        self.lstm_M = nn.LSTM(input_size=8*self.d, hidden_size=self.d, num_layers=2,
+                              batch_first=True, bidirectional=True, dropout=args.dropout)
+
+        # 6. Output Layer
+        self.lstm_M2 = nn.LSTM(input_size=2*self.d, hidden_size=self.d, num_layers=1,
+                               batch_first=True, bidirectional=True)
+        self.Wp1 = nn.Linear(10*self.d, 1 , bias=False)
+        self.Wp2 = nn.Linear(10*self.d, 1 , bias=False)
+
+        self.use_cuda = use_cuda
         if use_cuda:
             self.char_embedding = self.char_embedding.cuda()
             self.word_embedding = self.word_embedding.cuda()
