@@ -1,4 +1,4 @@
-from model.model import BIDAF_Model
+from model.model import BIDAF_Model, EMA
 from model.data import SQuAD
 import torch
 import torch.nn as nn
@@ -8,11 +8,7 @@ from tqdm import tqdm
 from util import *
 import os
 
-def train(model, args, data):
-    parameters = filter(lambda p: p.requires_grad, model.parameters())
-    optimizer = optim.Adadelta(parameters, lr=args.learning_rate)
-    criterion = nn.NLLLoss()
-
+def train(model, args, data, optimizer, criterion, ema):
     model.train()
     loss, total = 0, 0
 
@@ -31,15 +27,22 @@ def train(model, args, data):
         batch_loss.backward()
         optimizer.step()
 
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                ema.update(name, param.data)
     loss /= total
     return loss, model
 
-def test(model, args, data):
-    criterion = nn.NLLLoss()
+def test(model, args, data, criterion, ema):
     loss, total = 0,0
     answers = dict()
     model.eval()
 
+    temp_ema = EMA(0)
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            temp_ema.register(name, param.data)
+            param.data.copy_(ema.get(name))
     iterator = data.dev_iter
     with torch.no_grad():
         for i, batch in tqdm(enumerate(iterator), total=len(iterator)):
@@ -65,13 +68,32 @@ def test(model, args, data):
                 answer = batch.c_word[0][i][s_idx[i]:e_idx[i]+1]
                 answer = ' '.join([data.WORD.vocab.itos[idx] for idx in answer])
                 answers[id] = answer
+    
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            param.data.copy_(temp_ema.get(name))
 
     loss /= total
     results = evaluate(args, answers)
     return loss, results['exact_match'], results['f1']
 
+def init_seed(seed=None):
+    if seed is None:
+        seed = int(round(time.time() * 1000)) % 10000
+
+    import os
+    import random
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic=True
+
 def main():
     parser = argparse.ArgumentParser()
+
+    # run
+    parser.add_argument('--seed',  type=int, default=0)
+
     # model
     parser.add_argument('--char_dim', default=100, type=int)
     parser.add_argument('--char_channel_width', default=5, type=int)
@@ -86,7 +108,7 @@ def main():
 
     # train
     parser.add_argument('--epoch', default=12, type=int)
-    parser.add_argument('--exp-decay-rate', default=0.999, type=float)
+    parser.add_argument('--exp_decay_rate', default=0.999, type=float)
     parser.add_argument('--learning_rate', default=0.5, type=float)
     parser.add_argument('--train_batch_size', default=60, type=int)
     parser.add_argument('--train_file', default='train-v1.1.json')
@@ -98,6 +120,8 @@ def main():
 
     args = parser.parse_args()
 
+    init_seed(args.seed)
+    
     print('loading SQuAD data...')
     data = SQuAD(args)
     setattr(args, 'char_vocab_size', len(data.CHAR.vocab))
@@ -111,15 +135,23 @@ def main():
     print('loading model complete!')
 
     print('training start!')
+    parameters = filter(lambda p: p.requires_grad, model.parameters())
+    optimizer = optim.Adadelta(parameters, lr=args.learning_rate)
+    ema = EMA(args.exp_decay_rate)
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            ema.register(name, param.data)
+    criterion = nn.NLLLoss()
+    
     best_f1 = 0
     if not os.path.exists('saved_models'):
         os.makedirs('saved_models')
 
     write_tsv("result",[['train_loss','val_loss', 'exact_match', 'f1']],append=False)
     for epoch in range(args.epoch):
-        train_loss, model = train(model, args, data)
-        val_loss, exact_match, f1 = test(model, args, data)
-
+        train_loss, model = train(model, args, data, optimizer, criterion, ema)
+        val_loss, exact_match, f1 = test(model, args, data, criterion, ema)
+        
         print("epoch={}/{} train_loss={}, val_loss={}, exact_match={}, f1={}".format(epoch+1,args.epoch,train_loss, val_loss, exact_match, f1))
         write_tsv("result",[[train_loss,val_loss, exact_match, f1]],append=True)
         if best_f1 < f1:
