@@ -93,6 +93,7 @@ def main():
 
     # run
     parser.add_argument('--seed',  type=int, default=0)
+    parser.add_argument('--model_name',  default='model')
 
     # model
     parser.add_argument('--char_dim', default=100, type=int)
@@ -147,16 +148,16 @@ def main():
     if not os.path.exists('saved_models'):
         os.makedirs('saved_models')
 
-    write_tsv("result",[['train_loss','val_loss', 'exact_match', 'f1']],append=False)
+    write_tsv(args.model_name,[['train_loss','val_loss', 'exact_match', 'f1']],append=False)
     for epoch in range(args.epoch):
         train_loss, model = train(model, args, data, optimizer, criterion, ema)
         val_loss, exact_match, f1 = test(model, args, data, criterion, ema)
         
         print("epoch={}/{} train_loss={}, val_loss={}, exact_match={}, f1={}".format(epoch+1,args.epoch,train_loss, val_loss, exact_match, f1))
-        write_tsv("result",[[train_loss,val_loss, exact_match, f1]],append=True)
+        write_tsv(args.model_name,[[train_loss,val_loss, exact_match, f1]],append=True)
         if best_f1 < f1:
             best_f1 = f1
-            model.save_checkpoint({'state_dict':model.state_dict()},"./","model.ckpt")
+            model.save_checkpoint({'state_dict':model.state_dict()},"./","{}.ckpt".format(args.model_name))
     print('training finished!')
 
 
