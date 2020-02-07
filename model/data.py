@@ -19,8 +19,8 @@ class SQuAD():
 
         logging.info("Preprocessing Data - First Phase  :: Reading And Transforming")
 
-        self.preprocess('{}/{}'.format(path, args.train_file))
-        self.preprocess('{}/{}'.format(path, args.dev_file))
+        self.preprocess('{}/{}'.format(path, args.train_file),draft=args.draft)
+        self.preprocess('{}/{}'.format(path, args.dev_file),draft=args.draft)
 
         self.RAW = data.RawField(); self.RAW.is_target = False
 
@@ -57,7 +57,7 @@ class SQuAD():
         self.dev_iter   = data.BucketIterator(dataset = self.dev, batch_size = args.dev_batch_size, sort_key = lambda x : len(x.c_word), device=device)
 
 
-    def preprocess(self, path):
+    def preprocess(self, path, draft):
         output = []
         stopwords = [' ', '\n', '\u3000', '\u202f', '\u2009']
 
@@ -68,6 +68,9 @@ class SQuAD():
                 for line in t:
                     data.append(json.loads(line))
                 t.close()
+            # pdb.set_trace()
+            if draft:
+                data[0]['data'] = data[0]['data'][:1]
 
             for topic in data[0]['data']:
                 for paragraph in topic['paragraphs']:
@@ -108,8 +111,6 @@ class SQuAD():
                                                 ('answer', answer),
                                                 ('start_idx', s_idx),
                                                 ('end_idx', e_idx)]))
-                #     break ## FOR TOY
-                # break ## FOR TOY
                 
         with open('{}l'.format(path), 'w', encoding='utf-8') as f:
             for line in output:

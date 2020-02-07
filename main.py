@@ -7,8 +7,12 @@ import argparse
 from tqdm import tqdm
 from util import *
 import os
+import pdb
+from tensorboardX import SummaryWriter
+summary = SummaryWriter()
 
 def train(model, args, data, optimizer, criterion, ema):
+    print("train!")
     model.train()
     loss, total = 0, 0
 
@@ -22,8 +26,12 @@ def train(model, args, data, optimizer, criterion, ema):
         batch_loss = criterion(p1,batch.start_idx) + criterion(p2,batch.end_idx)
         if i%args.print_freq == 0 :
             print("step={}/{}, batch_loss={}".format(i+1, len(iterator), batch_loss))
+        
+        if (args.train_global_steps + 1) % 10 == 0:
+            summary.add_scalar('loss/loss_train', batch_loss.item(), args.train_global_steps) # tensorboard 
         loss += batch_loss.item()
         total += 1
+        args.train_global_steps += 1
         batch_loss.backward()
         optimizer.step()
 
@@ -34,6 +42,7 @@ def train(model, args, data, optimizer, criterion, ema):
     return loss, model
 
 def test(model, args, data, criterion, ema):
+    print("test!")
     loss, total = 0,0
     answers = dict()
     model.eval()
@@ -51,9 +60,12 @@ def test(model, args, data, criterion, ema):
                     query_words=batch.q_word[0],
                     query_chars=batch.q_char)
             batch_loss = criterion(p1,batch.start_idx) + criterion(p2,batch.end_idx)
+            if (args.val_global_steps + 1) % 10 == 0:
+                summary.add_scalar('loss/loss_val', batch_loss.item(), args.val_global_steps) # tensorboard 
             loss += batch_loss.item()
             total += 1
-
+            args.val_global_steps += 1
+            
             # (batch, c_len, c_len)
             batch_size, c_len = p1.size()
             ls = nn.LogSoftmax(dim=1)
@@ -88,10 +100,21 @@ def init_seed(seed=None):
     random.seed(seed)
     torch.backends.cudnn.deterministic=True
 
+def str2bool(v):
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
 def main():
     parser = argparse.ArgumentParser()
 
     # run
+    parser.add_argument('--mode',  default='train') # train, test
     parser.add_argument('--seed',  type=int, default=0)
     parser.add_argument('--model_name',  default='model')
 
@@ -106,9 +129,10 @@ def main():
     
     # data
     parser.add_argument('--max_token_len', default=400, type=int)
+    parser.add_argument('--draft', default=False, type=str2bool)
 
     # train
-    parser.add_argument('--epoch', default=12, type=int)
+    parser.add_argument('--epoch', default=20, type=int)
     parser.add_argument('--exp_decay_rate', default=0.999, type=float)
     parser.add_argument('--learning_rate', default=0.5, type=float)
     parser.add_argument('--train_batch_size', default=60, type=int)
@@ -145,6 +169,8 @@ def main():
     criterion = nn.NLLLoss()
     
     best_f1 = 0
+    args.train_global_steps = 0
+    args.val_global_steps = 0
     if not os.path.exists('saved_models'):
         os.makedirs('saved_models')
 
