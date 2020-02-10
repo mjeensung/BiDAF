@@ -38,6 +38,6 @@ python main.py --model_name ${MODEL_NAME}\
 ## Evaluatation
 | checkout | dataset       | EM | F1 |
 |----------|---------------|----|----|
-|          | SQuAD1.1      | ?  | ?  |
-|          | SQuAD2.0 (no_answer False)      | ?  | ?  |
+| edca354e8b74d895c6f5a363f31aefab267dbf89         | SQuAD1.1      | 65.13  | 75.53  |
+| edca354e8b74d895c6f5a363f31aefab267dbf89         | SQuAD2.0 (no_answer False)      | 32.87  | 38.31  |
 |          | SQuAD2.0      | ?  | ?  |
